@@ -3,7 +3,7 @@
 #include "Obfuscation/Obfuscation.h"
 #include "json.hpp"
 #include "llvm/ADT/Triple.h"
-#include "llvm/IR/CallSite.h"
+#include "llvm/IR/AbstractCallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
@@ -49,7 +49,7 @@ struct FunctionCallObfuscate : public FunctionPass {
       SmallString<32> Path;
       if (sys::path::home_directory(Path)) { // Stolen from LineEditor.cpp
         sys::path::append(Path, "Hikari", "SymbolConfig.json");
-        SymbolConfigPath = Path.str();
+        SymbolConfigPath = Path.str().str();
       }
     }
     ifstream infile(SymbolConfigPath);
@@ -146,7 +146,7 @@ struct FunctionCallObfuscate : public FunctionPass {
       GlobalVariable &GV = *G;
       if (GV.getName().str().find("OBJC_CLASSLIST_REFERENCES") == 0) {
         if (GV.hasInitializer()) {
-          string className = GV.getInitializer()->getName();
+          string className = GV.getInitializer()->getName().str();
           className.replace(className.find("OBJC_CLASS_$_"),
                             strlen("OBJC_CLASS_$_"), "");
           for (auto U = GV.user_begin(); U != GV.user_end(); U++) {
@@ -243,8 +243,8 @@ struct FunctionCallObfuscate : public FunctionPass {
       for (auto I = BB.getFirstInsertionPt(), end = BB.end(); I != end; ++I) {
         Instruction &Inst = *I;
         if (isa<CallInst>(&Inst) || isa<InvokeInst>(&Inst)) {
-          CallSite CS(&Inst);
-          Function *calledFunction = CS.getCalledFunction();
+          CallBase *CS = cast<CallBase>(&Inst);
+          Function *calledFunction = CS->getCalledFunction();
           if (calledFunction == NULL) {
             /*
               Note:
@@ -254,7 +254,7 @@ struct FunctionCallObfuscate : public FunctionPass {
               the called Function* from there
             */
             calledFunction =
-                dyn_cast<Function>(CS.getCalledValue()->stripPointerCasts());
+                dyn_cast<Function>(CS->getCalledOperand()->stripPointerCasts());
           }
           // Simple Extracting Failed
           // Use our own implementation
@@ -262,7 +262,7 @@ struct FunctionCallObfuscate : public FunctionPass {
             DEBUG_WITH_TYPE(
                 "opt", errs()
                            << "Failed To Extract Function From Indirect Call: "
-                           << *CS.getCalledValue() << "\n");
+                           << *CS->getCalledOperand() << "\n");
             continue;
           }
           // It's only safe to restrict our modification to external symbols
@@ -314,8 +314,8 @@ struct FunctionCallObfuscate : public FunctionPass {
             args.push_back(IRB.CreateGlobalStringPtr(calledFunctionName));
             Value *fp = IRB.CreateCall(dlsym_decl, ArrayRef<Value *>(args));
             Value *bitCastedFunction =
-                IRB.CreateBitCast(fp, CS.getCalledValue()->getType());
-            CS.setCalledFunction(bitCastedFunction);
+                IRB.CreateBitCast(fp, CS->getCalledOperand()->getType());
+            CS->setCalledOperand(bitCastedFunction);
           }
         }
       }

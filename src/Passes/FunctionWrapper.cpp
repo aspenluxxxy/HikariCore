@@ -1,7 +1,7 @@
 // For licensing terms, please read LICENSE.md in this repository.
 //===----------------------------------------------------------------------===//
 #include "Obfuscation/Obfuscation.h"
-#include "llvm/IR/CallSite.h"
+#include "llvm/IR/AbstractCallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstIterator.h"
@@ -36,7 +36,7 @@ struct FunctionWrapper : public ModulePass {
     return StringRef("FunctionWrapper");
   }
   bool runOnModule(Module &M) override {
-    vector<CallSite *> callsites;
+    vector<CallBase *> callsites;
     for (Module::iterator iter = M.begin(); iter != M.end(); iter++) {
       Function &F = *iter;
       if (toObfuscate(flag, &F, "fw")) {
@@ -45,23 +45,23 @@ struct FunctionWrapper : public ModulePass {
           Instruction *Inst = &*fi;
           if (isa<CallInst>(Inst) || isa<InvokeInst>(Inst)) {
             if ((int)llvm::cryptoutils->get_range(100) <= ProbRate) {
-              callsites.push_back(new CallSite(Inst));
+              callsites.push_back(cast<CallBase>(Inst));
             }
           }
         }
       }
     }
-    for (CallSite *CS : callsites) {
+    for (CallBase *CS : callsites) {
       for (int i = 0; i < ObfTimes && CS != nullptr; i++) {
         CS = HandleCallSite(CS);
       }
     }
     return true;
   } // End of runOnModule
-  CallSite *HandleCallSite(CallSite *CS) {
+  CallBase *HandleCallSite(CallBase *CS) {
     Value *calledFunction = CS->getCalledFunction();
     if (calledFunction == nullptr) {
-      calledFunction = CS->getCalledValue()->stripPointerCasts();
+      calledFunction = CS->getCalledOperand()->stripPointerCasts();
     }
     // Filter out IndirectCalls that depends on the context
     // Otherwise It'll be blantantly troublesome since you can't reference an
@@ -71,7 +71,7 @@ struct FunctionWrapper : public ModulePass {
     if (calledFunction == nullptr ||
         (!isa<ConstantExpr>(calledFunction) &&
          !isa<Function>(calledFunction)) ||
-        CS->getIntrinsicID() != Intrinsic::ID::not_intrinsic) {
+        CS->getIntrinsicID() != Intrinsic::IndependentIntrinsics::not_intrinsic) {
       return nullptr;
     }
     if (Function *tmp = dyn_cast<Function>(calledFunction)) {
@@ -114,8 +114,7 @@ struct FunctionWrapper : public ModulePass {
       params.push_back(arg);
     }
     Value *retval = IRB.CreateCall(
-        ConstantExpr::getBitCast(cast<Function>(calledFunction),
-                                 CS->getCalledValue()->getType()),
+	FunctionCallee(cast<Function>(calledFunction)),
         ArrayRef<Value *>(params));
     if (ft->getReturnType()->isVoidTy()) {
       IRB.CreateRetVoid();
@@ -124,9 +123,7 @@ struct FunctionWrapper : public ModulePass {
     }
     CS->setCalledFunction(func);
     CS->mutateFunctionType(ft);
-    Instruction *Inst = CS->getInstruction();
-    delete CS;
-    return new CallSite(Inst);
+    return CS;
   }
 };
 ModulePass *createFunctionWrapperPass() { return new FunctionWrapper(); }
