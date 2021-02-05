@@ -14,23 +14,23 @@
 #ifndef _SPLIT_INCLUDES_
 #define _SPLIT_INCLUDES_
 
-
 // LLVM include
-#include "llvm/Pass.h"
-#include "llvm/IR/BasicBlock.h"
+#include "CryptoUtils.h"
+#include "Utils.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/Transforms/Utils/Local.h" // For DemoteRegToStack and DemotePHIToStack
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Module.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Transforms/IPO.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Support/CommandLine.h"
-#include "Utils.h"
-#include "CryptoUtils.h"
+#include "llvm/Transforms/Utils/Local.h" // For DemoteRegToStack and DemotePHIToStack
 
 // Namespace
-namespace llvm {
-	FunctionPass *createSplitBasicBlockPass();
-	FunctionPass *createSplitBasicBlockPass(bool flag);
-	void initializeSplitBasicBlockPass(PassRegistry &Registry);
-}
+namespace llvm
+{
+FunctionPass* createSplitBasicBlockPass();
+FunctionPass* createSplitBasicBlockPass(bool flag);
+void initializeSplitBasicBlockPass(PassRegistry& Registry);
+} // namespace llvm
 #endif

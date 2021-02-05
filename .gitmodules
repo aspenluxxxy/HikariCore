@@ -1,0 +1,3 @@
+[submodule "nanorand"]
+	path = nanorand
+	url = https://github.com/aspenluxxxy/nanorand-rs
